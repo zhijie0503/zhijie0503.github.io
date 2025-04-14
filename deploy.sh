@@ -16,11 +16,7 @@ git init
 git add -A
 git commit -m 'deploy'
 
-# 如果你要部署在 https://<USERNAME>.github.io
-# git push -f git@github.com:<USERNAME>/<USERNAME>.github.io.git main
-
-# 如果你要部署在 https://<USERNAME>.github.io/<REPO>
-# 将下面的 <USERNAME> 和 <REPO> 替换为你的GitHub用户名和仓库名
-git push -f git@github.com:<USERNAME>/games-demo.git main:gh-pages
+# 使用已有的origin仓库
+git push -f origin main:gh-pages
 
 cd - 

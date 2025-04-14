@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import styled from 'styled-components'
 import Grid from './components/Grid'
 import './App.css'
@@ -29,7 +29,7 @@ function App() {
     setScore(prevScore => prevScore + points)
   }
 
-  const handleGameEnd = (finalScore: number) => {
+  const handleGameEnd = (_: number) => {
     // 使用当前分数作为最终得分
     const currentScore = score
     setFinalScore(currentScore)
