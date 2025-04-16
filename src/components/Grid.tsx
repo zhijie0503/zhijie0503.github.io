@@ -45,8 +45,28 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
   const [lastHoverCell, setLastHoverCell] = useState<Position | null>(null)
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION)
   const [gameActive, setGameActive] = useState(true)
+  const [isMobileMode, setIsMobileMode] = useState(false)
+  const [touchMessage, setTouchMessage] = useState('')
   const gridRef = useRef<HTMLDivElement>(null)
   
+  // 检测是否为移动设备
+  useEffect(() => {
+    const checkIsMobile = () => {
+      return window.innerWidth <= 768;
+    };
+    
+    setIsMobileMode(checkIsMobile());
+    
+    const handleResize = () => {
+      setIsMobileMode(checkIsMobile());
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
   // 获取触摸或鼠标事件中的坐标对应的网格单元格
   const getCellFromEvent = (clientX: number, clientY: number) => {
     if (!gridRef.current) return null
@@ -123,6 +143,12 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
       setGrid(newGrid)
       setSelectedCells([])
       setSelectionSum(0)
+      setTouchMessage('完美匹配！')
+      
+      // 短暂显示消息后清除
+      setTimeout(() => {
+        setTouchMessage('');
+      }, 1500);
     }
   }, [selectedCells, grid, onScoreChange])
 
@@ -255,15 +281,54 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
       // 不能选择值为0的方格
       if (grid[row][col].value === 0) return
       
-      const newSelectedCells: Position[] = [{ row, col }]
-      setSelectedCells(newSelectedCells)
-      setIsSelecting(true)
-      setLastHoverCell({ row, col })
+      if (isMobileMode) {
+        // 移动端模式：检查是否已有一个选中的方格
+        if (selectedCells.length === 1) {
+          const firstCell = selectedCells[0];
+          
+          // 检查是否有有效路径
+          const isValidConnection = isValidPath(grid, firstCell, { row, col });
+          
+          if (isValidConnection) {
+            // 添加第二个方格
+            const newSelectedCells = [...selectedCells, { row, col }];
+            setSelectedCells(newSelectedCells);
+            
+            // sum计算在useEffect中完成，但我们可以在这里预先检查
+            const sum = grid[firstCell.row][firstCell.col].value + grid[row][col].value;
+            
+            if (sum !== TARGET_SUM) {
+              // 如果和不为10，清空选择，并将当前点击的方格设为第一个选中方格
+              setTouchMessage(`和为${sum}，不是${TARGET_SUM}，请重试`);
+              
+              // 短暂显示消息后清除
+              setTimeout(() => {
+                setTouchMessage('');
+                setSelectedCells([{ row, col }]);
+              }, 1000);
+            }
+          } else {
+            // 如果没有有效路径，将当前点击的方格设为第一个选中方格
+            setSelectedCells([{ row, col }]);
+          }
+        } else {
+          // 没有选中的方格，设置第一个
+          setSelectedCells([{ row, col }]);
+        }
+      } else {
+        // 桌面模式：原来的拖动选择逻辑
+        const newSelectedCells: Position[] = [{ row, col }]
+        setSelectedCells(newSelectedCells)
+        setIsSelecting(true)
+        setLastHoverCell({ row, col })
+      }
     }
   }
   
   // 处理触摸移动事件
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (isMobileMode) return; // 移动端模式下不处理触摸移动
+    
     if (!isSelecting || !gameActive) return
     
     // 防止默认行为（如滚动和缩放）
@@ -350,7 +415,7 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
   return (
     <Container onMouseLeave={handleMouseLeave}>
       <GameInfo>
-        <SelectionInfo sum={selectionSum} target={TARGET_SUM} />
+        <SelectionInfo sum={selectionSum} target={TARGET_SUM} isMobile={isMobileMode} message={touchMessage} />
         <TimeDisplay active={gameActive}>剩余时间: {timeLeft}秒</TimeDisplay>
       </GameInfo>
       <GridContainer 
@@ -383,33 +448,52 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
           </Row>
         ))}
       </GridContainer>
+      {isMobileMode && selectedCells.length === 1 && (
+        <MobileHint>
+          已选择 {grid[selectedCells[0].row][selectedCells[0].col].value}，
+          请点击另一个方格使和为 {TARGET_SUM}
+        </MobileHint>
+      )}
     </Container>
   )
 }
 
 // 显示选择情况的组件
-const SelectionInfo = ({ sum, target }: { sum: number, target: number }) => {
+const SelectionInfo = ({ sum, target, isMobile, message }: { sum: number, target: number, isMobile?: boolean, message?: string }) => {
   const isMatch = sum === target && sum > 0
   const isOver = sum > target
   
-  let message = ''
-  let messageStyle = {}
+  let displayMessage = message || '';
+  let messageStyle = {};
   
-  if (isMatch) {
-    message = '完美匹配！'
-    messageStyle = { color: '#2ecc71' }
-  } else if (isOver) {
-    message = '数字和超过了10'
-    messageStyle = { color: '#e74c3c' }
-  } else if (sum > 0) {
-    message = `当前和: ${sum} (目标: ${target})`
-    messageStyle = { color: '#3498db' }
+  if (!displayMessage) {
+    if (isMatch) {
+      displayMessage = '完美匹配！'
+      messageStyle = { color: '#2ecc71' }
+    } else if (isOver) {
+      displayMessage = '数字和超过了10'
+      messageStyle = { color: '#e74c3c' }
+    } else if (sum > 0) {
+      if (!isMobile) {
+        displayMessage = `当前和: ${sum} (目标: ${target})`
+        messageStyle = { color: '#3498db' }
+      }
+    } else {
+      if (!isMobile) {
+        displayMessage = `选择数字，使它们的和等于 ${target}`
+        messageStyle = { color: '#7f8c8d' }
+      }
+    }
   } else {
-    message = `选择数字，使它们的和等于 ${target}`
-    messageStyle = { color: '#7f8c8d' }
+    // 使用传入的消息
+    if (displayMessage.includes('匹配')) {
+      messageStyle = { color: '#2ecc71' }
+    } else {
+      messageStyle = { color: '#e74c3c' }
+    }
   }
   
-  return <InfoText style={messageStyle}>{message}</InfoText>
+  return <InfoText style={messageStyle}>{displayMessage}</InfoText>
 }
 
 const GameInfo = styled.div`
@@ -479,6 +563,16 @@ const GridContainer = styled.div`
 
 const Row = styled.div`
   display: flex;
+`
+
+const MobileHint = styled.div`
+  margin-top: 1rem;
+  font-size: 1rem;
+  color: #3498db;
+  text-align: center;
+  padding: 0.5rem;
+  background-color: rgba(52, 152, 219, 0.1);
+  border-radius: 8px;
 `
 
 export default Grid 
