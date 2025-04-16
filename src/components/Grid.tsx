@@ -121,6 +121,46 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
     }
   }, [selectedCells, grid, onScoreChange])
 
+  // 判断两个单元格之间是否有有效路径（不考虑值为0的格子）
+  const isValidPath = (grid: any[][], start: Position, end: Position): boolean => {
+    // 如果行相同，检查两个单元格之间的列是否有有效路径
+    if (start.row === end.row) {
+      const minCol = Math.min(start.col, end.col);
+      const maxCol = Math.max(start.col, end.col);
+      
+      // 如果它们相邻，直接返回true
+      if (maxCol - minCol === 1) return true;
+      
+      // 检查它们之间是否都是值为0的格子
+      for (let col = minCol + 1; col < maxCol; col++) {
+        if (grid[start.row][col].value !== 0) {
+          return false;
+        }
+      }
+      return true;
+    }
+    
+    // 如果列相同，检查两个单元格之间的行是否有有效路径
+    if (start.col === end.col) {
+      const minRow = Math.min(start.row, end.row);
+      const maxRow = Math.max(start.row, end.row);
+      
+      // 如果它们相邻，直接返回true
+      if (maxRow - minRow === 1) return true;
+      
+      // 检查它们之间是否都是值为0的格子
+      for (let row = minRow + 1; row < maxRow; row++) {
+        if (grid[row][start.col].value !== 0) {
+          return false;
+        }
+      }
+      return true;
+    }
+    
+    // 如果既不是同行也不是同列，则不是有效路径
+    return false;
+  }
+
   // 开始选择
   const handleMouseDown = (row: number, col: number) => {
     if (!gameActive) return
@@ -161,13 +201,11 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
         return
       }
       
-      // 检查当前单元格是否与最后一个选中的单元格相邻
+      // 检查当前单元格是否与最后一个选中的单元格相邻（考虑消除的格子）
       const lastCell = selectedCells[selectedCells.length - 1]
-      const isAdjacent = 
-        (Math.abs(row - lastCell.row) === 1 && col === lastCell.col) ||
-        (Math.abs(col - lastCell.col) === 1 && row === lastCell.row)
+      const isValidConnection = isValidPath(grid, lastCell, { row, col })
       
-      if (isAdjacent) {
+      if (isValidConnection) {
         setSelectedCells([...selectedCells, { row, col }])
       }
     }
@@ -254,13 +292,11 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
           return
         }
         
-        // 检查当前单元格是否与最后一个选中的单元格相邻
+        // 检查当前单元格是否与最后一个选中的单元格有有效路径
         const lastCell = selectedCells[selectedCells.length - 1]
-        const isAdjacent = 
-          (Math.abs(row - lastCell.row) === 1 && col === lastCell.col) ||
-          (Math.abs(col - lastCell.col) === 1 && row === lastCell.row)
+        const isValidConnection = isValidPath(grid, lastCell, { row, col })
         
-        if (isAdjacent) {
+        if (isValidConnection) {
           setSelectedCells([...selectedCells, { row, col }])
         }
       }
