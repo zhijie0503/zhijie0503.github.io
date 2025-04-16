@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import styled from 'styled-components'
 import Cell from './Cell'
 
@@ -45,6 +45,30 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
   const [lastHoverCell, setLastHoverCell] = useState<Position | null>(null)
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION)
   const [gameActive, setGameActive] = useState(true)
+  const gridRef = useRef<HTMLDivElement>(null)
+  
+  // 获取触摸或鼠标事件中的坐标对应的网格单元格
+  const getCellFromEvent = (clientX: number, clientY: number) => {
+    if (!gridRef.current) return null
+    
+    const gridRect = gridRef.current.getBoundingClientRect()
+    const x = clientX - gridRect.left
+    const y = clientY - gridRect.top
+    
+    // 单元格大小（宽度+边距）
+    const cellSize = 36 // 32px宽度 + 2px边距*2
+    
+    // 计算行列
+    const row = Math.floor(y / cellSize)
+    const col = Math.floor(x / cellSize)
+    
+    // 确保在有效范围内
+    if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
+      return { row, col }
+    }
+    
+    return null
+  }
 
   // 游戏计时器
   useEffect(() => {
@@ -171,6 +195,88 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
     }
   }, [isSelecting, selectionSum])
 
+  // 处理触摸开始事件
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!gameActive) return
+    
+    // 防止默认行为（如滚动）
+    e.preventDefault()
+    
+    const touch = e.touches[0]
+    const cellPos = getCellFromEvent(touch.clientX, touch.clientY)
+    
+    if (cellPos) {
+      const { row, col } = cellPos
+      
+      // 不能选择值为0的方格
+      if (grid[row][col].value === 0) return
+      
+      const newSelectedCells: Position[] = [{ row, col }]
+      setSelectedCells(newSelectedCells)
+      setIsSelecting(true)
+      setLastHoverCell({ row, col })
+    }
+  }
+  
+  // 处理触摸移动事件
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSelecting || !gameActive) return
+    
+    // 防止默认行为（如滚动）
+    e.preventDefault()
+    
+    const touch = e.touches[0]
+    const cellPos = getCellFromEvent(touch.clientX, touch.clientY)
+    
+    if (cellPos) {
+      const { row, col } = cellPos
+      
+      // 如果是值为0的方格，不允许选择
+      if (grid[row][col].value === 0) return
+      
+      // 如果刚刚处理过这个单元格，直接返回
+      if (lastHoverCell && lastHoverCell.row === row && lastHoverCell.col === col) {
+        return
+      }
+      
+      // 更新最后处理的单元格
+      setLastHoverCell({ row, col })
+      
+      // 检查当前单元格是否已被选中
+      const isCellSelected = selectedCells.some(
+        cell => cell.row === row && cell.col === col
+      )
+      
+      if (!isCellSelected) {
+        // 如果之前选中的单元格为空，直接添加
+        if (selectedCells.length === 0) {
+          setSelectedCells([{ row, col }])
+          return
+        }
+        
+        // 检查当前单元格是否与最后一个选中的单元格相邻
+        const lastCell = selectedCells[selectedCells.length - 1]
+        const isAdjacent = 
+          (Math.abs(row - lastCell.row) === 1 && col === lastCell.col) ||
+          (Math.abs(col - lastCell.col) === 1 && row === lastCell.row)
+        
+        if (isAdjacent) {
+          setSelectedCells([...selectedCells, { row, col }])
+        }
+      }
+    }
+  }
+  
+  // 处理触摸结束事件
+  const handleTouchEnd = () => {
+    setIsSelecting(false)
+    
+    // 如果和不为10，清空选择
+    if (selectionSum !== TARGET_SUM) {
+      setSelectedCells([])
+    }
+  }
+
   // 添加全局鼠标抬起事件监听器
   useEffect(() => {
     window.addEventListener('mouseup', handleMouseUp)
@@ -185,7 +291,12 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
         <SelectionInfo sum={selectionSum} target={TARGET_SUM} />
         <TimeDisplay active={gameActive}>剩余时间: {timeLeft}秒</TimeDisplay>
       </GameInfo>
-      <GridContainer>
+      <GridContainer 
+        ref={gridRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {grid.map((row, rowIndex) => (
           <Row key={rowIndex}>
             {row.map((cell, colIndex) => {
@@ -243,6 +354,12 @@ const GameInfo = styled.div`
   justify-content: space-between;
   width: 100%;
   margin-bottom: 1rem;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
 `
 
 const TimeDisplay = styled.div<{ active: boolean }>`
@@ -270,6 +387,17 @@ const GridContainer = styled.div`
   padding: 10px;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
   user-select: none;
+  touch-action: none; /* 防止浏览器的默认触摸行为如滚动 */
+  
+  @media (max-width: 768px) {
+    transform: scale(0.85);
+    transform-origin: top center;
+  }
+  
+  @media (max-width: 480px) {
+    transform: scale(0.7);
+    transform-origin: top center;
+  }
 `
 
 const Row = styled.div`
