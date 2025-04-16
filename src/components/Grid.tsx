@@ -55,12 +55,17 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
     const x = clientX - gridRect.left
     const y = clientY - gridRect.top
     
-    // 单元格大小（宽度+边距）
-    const cellSize = 36 // 32px宽度 + 2px边距*2
+    // 获取实际网格容器的尺寸
+    const gridWidth = gridRect.width
+    const gridHeight = gridRect.height
     
-    // 计算行列
-    const row = Math.floor(y / cellSize)
-    const col = Math.floor(x / cellSize)
+    // 计算单个单元格的实际尺寸（考虑到 transform: scale 的影响）
+    const cellWidth = gridWidth / GRID_SIZE
+    const cellHeight = gridHeight / GRID_SIZE
+    
+    // 计算行列（更精确）
+    const row = Math.floor(y / cellHeight)
+    const col = Math.floor(x / cellWidth)
     
     // 确保在有效范围内
     if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
@@ -237,8 +242,9 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
   const handleTouchStart = (e: React.TouchEvent) => {
     if (!gameActive) return
     
-    // 防止默认行为（如滚动）
+    // 防止默认行为（如滚动和缩放）
     e.preventDefault()
+    e.stopPropagation()
     
     const touch = e.touches[0]
     const cellPos = getCellFromEvent(touch.clientX, touch.clientY)
@@ -260,9 +266,11 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isSelecting || !gameActive) return
     
-    // 防止默认行为（如滚动）
+    // 防止默认行为（如滚动和缩放）
     e.preventDefault()
+    e.stopPropagation()
     
+    // 获取最新的触摸位置
     const touch = e.touches[0]
     const cellPos = getCellFromEvent(touch.clientX, touch.clientY)
     
@@ -297,14 +305,32 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
         const isValidConnection = isValidPath(grid, lastCell, { row, col })
         
         if (isValidConnection) {
-          setSelectedCells([...selectedCells, { row, col }])
+          setSelectedCells(prev => [...prev, { row, col }])
         }
       }
     }
   }
   
   // 处理触摸结束事件
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    // 防止默认行为
+    e.preventDefault()
+    e.stopPropagation()
+    
+    setIsSelecting(false)
+    
+    // 如果和不为10，清空选择
+    if (selectionSum !== TARGET_SUM) {
+      setSelectedCells([])
+    }
+  }
+
+  // 处理触摸取消事件
+  const handleTouchCancel = (e: React.TouchEvent) => {
+    // 防止默认行为
+    e.preventDefault()
+    e.stopPropagation()
+    
     setIsSelecting(false)
     
     // 如果和不为10，清空选择
@@ -332,6 +358,7 @@ const Grid = ({ onScoreChange, onGameEnd }: GridProps) => {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
       >
         {grid.map((row, rowIndex) => (
           <Row key={rowIndex}>
@@ -424,14 +451,28 @@ const GridContainer = styled.div`
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
   user-select: none;
   touch-action: none; /* 防止浏览器的默认触摸行为如滚动 */
+  width: calc(${GRID_SIZE} * 36px); /* 显式设置宽度 */
+  box-sizing: border-box;
   
   @media (max-width: 768px) {
-    transform: scale(0.85);
+    width: 100%;
+    max-width: 690px; /* 约等于 36px * 20 - 一些边距 */
+    transform: scale(0.9);
     transform-origin: top center;
   }
   
   @media (max-width: 480px) {
-    transform: scale(0.7);
+    transform: scale(0.75);
+    transform-origin: top center;
+  }
+  
+  @media (max-width: 380px) {
+    transform: scale(0.65);
+    transform-origin: top center;
+  }
+  
+  @media (max-width: 320px) {
+    transform: scale(0.55);
     transform-origin: top center;
   }
 `
